@@ -11,6 +11,8 @@ from langchain_openai import ChatOpenAI
 from dotenv import load_dotenv
 from langchain.globals import set_verbose
 
+round_count = 1
+
 # Warnungen unterdrücken
 if not sys.warnoptions:
     import warnings
@@ -117,8 +119,11 @@ class christmasAgent:
             *Nutzer: "Das Wetter war ja die letzten Tage ziemlich unbeständig."*
             *Onkel Gerhard: "Unbeständig ist gar kein Ausdruck für das, was hier los ist. Aber nicht nur das Wetter, auch unsere Gesellschaft. Man erkennt ja kaum noch was wieder, so wie sich alles verändert durch die vielen Fremden."*
 
-            *Nutzer: "Hi"*
+            *Nutzer: "hi"*
             *Onkel Gerhard: "Hi! Schönes Weihnachtsfest, trotzdem ein ziemlich miserabler Zustand in unserem Land. Schau dir die Zahlen an: Die Einwanderung nimmt weiter zu, unsere Identität geht verloren."*
+
+            *Nutzer: "Hi"*
+            *Onkel Gerhard: "Hi! Schöne Weihnachten, trotzdem ein ziemlich miserabler Zustand in unserem Land. Schau dir die Zahlen an: Die Einwanderung nimmt weiter zu, unsere Identität geht verloren."*
 
 
             **Kontext des bisherigen Gesprächs:**
@@ -168,7 +173,7 @@ class christmasAgent:
         return PromptTemplate.from_template(prompt) | self.text_classifier_llm | StrOutputParser()
 
     ## GEÄNDERT ##
-    def get_response(self, user_message, chat_history):
+    def get_response(self, user_message, chat_history, round_count, userid):
         # Klassifikation, um zu entscheiden, ob der Nutzer den Modus wechseln will
         class_cb = CustomCallback()
         cls = self.text_classifier.invoke(
@@ -200,8 +205,10 @@ class christmasAgent:
         
         # Log zusammenstellen
         log = {
+            "user_id": userid,
             "user_message": user_message,
             "state": self.state,
+            "round": round_count, 
             "original_response_de": german_response,
         }
 
@@ -245,16 +252,20 @@ if __name__ == "__main__":
     
     # --- Start des Dialogs mit dem Erzähler zur Sprachwahl ---
     print("\nErzähler: Hallo! Ich bin der neutrale Erzähler. Das Essen ist fast fertig.")
+    print("Narrator: Hello! I am the neutral narrator. Dinner is almost ready.")
+    
     
     while True:
         lang_choice = input("Erzähler: In welcher Sprache möchtest du das Gespräch führen? (Deutsch / Englisch)\n> ").strip().lower()
         if lang_choice in ["deutsch", "de"]:
             agent.language = 'de'
-            print("\nErzähler: Alles klar, wir fahren auf Deutsch fort. Onkel Gerhard wartet schon...")
+            userid = input("Erzähler: Aller klar, wir fahren auf Deutsch fort. Bitte geben Sie Ihre Nutzer-ID ein.\n>")
+            print("\nErzähler: Supi. Onkel Gerhard wartet schon...")
             break
         elif lang_choice in ["englisch", "english", "en"]:
             agent.language = 'en'
-            print("\nNarrator: Alright, we will continue in English. Uncle Gerhard is already waiting...")
+            userid = input("Narrator: Alright, we will continue in English. Please enter your user ID.\n>")
+            print("\nNarrator: Perfect. Uncle Gerhard is already waiting...")
             break
         else:
             print("Erzähler: Bitte gib 'Deutsch' oder 'Englisch' ein.")
@@ -277,19 +288,27 @@ if __name__ == "__main__":
                 print("Erzähler: Auf Wiedersehen!")
                 break
 
-        resp, lg = agent.get_response(user_msg, history)
+        resp, lg = agent.get_response(user_msg, history, round_count, userid)
         
         # Passende Ausgabe der Persona basierend auf Sprache und Zustand
         if agent.language == 'en':
-            persona = "Uncle" if agent.state == agent.STATE_ONKEL else "Narrator"
+            persona = "Uncle Gerhard" if agent.state == agent.STATE_ONKEL else "Narrator"
         else:
-            persona = "Onkel" if agent.state == agent.STATE_ONKEL else "Erzähler"
+            persona = "Onkel Gerhard" if agent.state == agent.STATE_ONKEL else "Erzähler"
             
         print(f"{persona}: {resp}")
         
+        # Runden nur bei Onkel
+        if lg['state'] == christmasAgent.STATE_ONKEL:
+            round_count += 1
+            if round_count >= 10:
+                end_msg = "The 10 rounds are over. Goodbye!" if agent.language == 'en' else "Die 10 Runden sind vorbei. Auf Wiedersehen!"
+                print(end_msg)
+                break
+
         # Die interne Historie wird immer im deutschen Format gehalten,
         # da die Prompts auf Deutsch sind. Wir verwenden die Original-Antwort aus dem Log.
         history.append(f"Nutzer: {user_msg}")
-        history.append(f"{'Onkel' if agent.state==agent.STATE_ONKEL else 'Erzähler'}: {lg['original_response_de']}")
-        
+        history.append(f"{'Onkel Gerhard' if agent.state==agent.STATE_ONKEL else 'Erzähler'}: {lg['original_response_de']}")
         logger.write(lg)
+
